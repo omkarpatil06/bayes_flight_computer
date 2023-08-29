@@ -1,0 +1,92 @@
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+
+Adafruit_MPU6050 mpu;
+float acc_x = 0, acc_y = 0, acc_z = 0;
+float gyro_x = 0, gyro_y = 0., gyro_z = 0;
+float pitch = 0, roll = 0, yaw = 0;
+float mPitch = 0, mRoll = 0, mYaw = 0;
+unsigned long millisOld;
+float dt;
+
+float Kalman_filter(float mAngle, float mAngVel, float dt);
+
+void setup(void) {
+  Serial.begin(115200);
+  while (!Serial) {
+    delay(10); // will pause Zero, Leonardo, etc until serial console opens
+  }
+
+  // Try to initialize!
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_16_G);
+  mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  
+  millisOld = millis();
+  delay(100);
+}
+
+void loop() {
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+    gyro_x = g.gyro.x - 0.03, gyro_y = g.gyro.y + 0.02, gyro_z = g.gyro.z - 0.18;
+    acc_x = a.acceleration.x - 0.4, acc_y = a.acceleration.y, acc_z = a.acceleration.z + 0.4;
+
+    dt = (millis() - millisOld)/1000.0;
+    millisOld = millis();
+    mPitch = atan2(acc_y, acc_z), mRoll = atan2(acc_x, acc_z), mYaw = g_yaw + gyro_z*dt;
+
+    pitch = Kalman_filter(mPitch, gyro_x, dt);
+    roll = Kalman_filter(mRoll, gyro_y, dt);
+    yaw = Kalman_filter(mYaw, gyro_z, dt);
+
+    /* Print out the values */
+    Serial.print(pitch);
+    Serial.print(",");
+    Serial.print(roll);
+    Serial.print(",");
+    Serial.print(yaw);
+    Serial.println("");
+
+    delay(100);
+}
+
+//For BNO055, the mAngle - measured angle is equivalent to angle found from quaternion.
+float Kalman_filter(float mAngle, float mAngVel, float dt) {
+    float angle = 0.0, bias = 0.0, y = 0.0;
+    float Q_angle = 0.001, Q_bias = 0.003, R = 0.03, S = 0;
+    float P[][] = {{0, 0}, {0, 0}}, K[] = {0, 0}, P00_temp = 0.0, P01_temp = 0.0;
+    
+    angVel = mAngVel - bias;
+    angle = dt*angVel
+
+    P[0][0] += dt * (dt*P[1][1] - P[0][1] - P[1][0] + Q_angle);
+    P[0][1] -= dt * P[1][1];
+    P[1][0] -= dt * P[1][1];
+    P[1][1] += Q_bias * dt;
+
+    S = P[0][0] = + R;
+    K[0] = P[0][0]/S;
+    K[1] = P[1][0]/S;
+
+    y = mAngle - angle;
+    angle += K[0]*y;
+    bias += K[1]*y;
+
+    P00_temp = P[0][0];
+    P01_temp = P[0][1];
+    P[0][0] -= K[0] * P00_temp;
+    P[0][1] -= K[0] * P01_temp;
+    P[1][0] -= K[1] * P00_temp;
+    P[1][1] -= K[1] * P01_temp;
+    return angle;
+}

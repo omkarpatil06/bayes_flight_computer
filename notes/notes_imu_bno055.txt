@@ -1,0 +1,92 @@
+// Install the Adafruit BNO055 library
+// Install the Adafruit Unified Sensor Library
+
+// Since we are using I2C, we will use wire.h library
+#include <Wire.h>
+
+// To use our adafruit products we need to use these libraries:
+#include <Adafruit_sensor.h>
+#include <Adafruit_BNO055.h>
+
+// Very helpful for doing maths related to imu's
+#include <utility/imumaths.h>
+#include<math.h>
+
+// Important macros
+#define BNO055_SAMPLERATE_DELAY_MS (100)    // We are setting our sample rate to every ms
+#define RAD_TO_DEG (57.295779513082320876798154814105) // Radians to degree converter
+
+// Global variables
+Adafruit_BNO055 myIMU = Adafruit_BNO055();    // I have created a sensor object myIMU with class Ada..BNO055
+float tilt_theta, tilt_phi;
+float gyro_theta, gyro_phi;
+float dt;
+unsigned long millisOld;
+float theta, phi;
+
+void setup(){
+    Serial.begin(115200);   //Baud Rate
+    myIMU.begin();          //All sensors start to sample
+    delay(1000);            //To make sure any hazards are settled
+    /* Example - How to get tempreature readings:
+    int8_t temp = myIMU.getTemp();
+    */
+    myIMU.setExtCrystalUse(true);       //The crystal is what produces square wave clock signals, we are using the arduino clk instead of the one in BNO055
+    millisOld = millis();
+}
+
+void loop(){
+    //GETTING MEASURMENTS:
+    uint8_t system, gyros, accel, mg = 0;
+    //0 - Bad calibration, 1 - OK calibration, 2 - Good calibration, 3 - Excellent calibration
+    myIMU.getCalibration(&system, &gyro, &accel, &mg);
+    
+    /*Orientation of gyroscope
+       -z    y
+        |   /
+        |  /
+        | /
+        |/_ _ _ _ x
+    */
+    // imu:: - instructs we need to communicate with a sensor
+    // Vector<3> - instructs to extract vector of 3 elements
+    // acc - vector stored in variable acc. acc as we want to store acceleration data
+    imu::Vector<3> acc = myIMU.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+    // Similar code can be done for recieving gyroscope (gyro) data
+    // Gyroscope data is the angular velocity along x, y and z axis.
+    imu::Vector<3> gyro = myIMU.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+    // Same for magnetometer data
+    imu::Vector<3> mag = myIMU.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
+    
+    // To axcess individual vectors elements use .x(), .y() and .z() extensions. Example for acceleration data:
+    Serial.print("X: %d, Y: %d, Z: %d", acc.x(), acc.y(), acc.z());
+    // To see calibration of sensors we need to print:
+    Serial.print(system);
+    Serial.println("Cal. gyro: %d, Cal. accelometer: %d and Cal. magnetometer: %d", gyros, accel, mg);
+    delay(BNO055_SAMPLERATE_DELAY_MS);      //Prevents from crashing readings
+    // Good way to visualise data is to use hackaday.io https://www.youtube.com/watch?v=_hz9XM9wjCs&list=PLGs0VKk2DiYwEo-k0mjIkWXlkrJWAU4L9&index=4
+    //--------------------------------------------------------------------------------------------------------
+
+    //GETTING TILT AND ANGLE
+    //tilt - the angle found using accelerometer readings
+    //angle - the angle found using gyroscope readings
+    //theta - angle made from orignl y-axis to new y-axis.
+    //phi - angle made from orignal x-axis to new x-axis.
+    //After doing some physics we find out that: angle = arctan(accel_x_or_y/accel_z)
+    tilt_theta = atan2(acc.x()/acc.z())*RAD_TO_DEG;
+    tilt_phi = atan2(acc.y()/acc.z())*RAD_TO_DEG;
+
+    //After using the angular velocity to degree formula we realise angle = angle + new_angle*dt:
+    dt = (millis() - millisOld)/1000.;
+    millisOld = millis();
+    gyro_theta = gyro_theta + gyro.y()*dt;
+    gyro_phi = gyro_phi - gyro.x()*dt;
+
+    /*Problem1: Acceleromter reacts to vibrations, affecting tilt. Tilt also starts to get noise!
+     *Problem2: As tilt approaches 90 degrees -> tan approaches infinity, so tilt measurments become inaccurate.
+     *Problem3: Gyroscope angle has an offset from 0. 
+    */
+    //We make a complimentary filter - account for gyro angle in short term and tilt in long term
+    theta = gyro_theta*0.95 + gyro_phi*0.05;
+    //More information can be found on Paul McWhorter 9 axis IMU series
+}
