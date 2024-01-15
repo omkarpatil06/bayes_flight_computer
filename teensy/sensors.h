@@ -87,19 +87,32 @@ public:
     }
 };
 
-/*lass BMP {
+class BMP {
     Adafruit_BMP280 bmp;
     
     public:
     void bmpInit(uint8_t address) {
         if (!bmp.begin(address)) {
-            Serial.println(F("Could not find a valid BMP280 sensor, check wiring"));
+            Serial.println(F("Could not find a valid BMP280 sensor, check wiring or try a different address!"));
+            Serial.println("SensorID was: 0x") Serial.println(bmp.sensorID(), 16);
+            Serial.print("ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
+            Serial.print("ID of 0x56-0x58 represents a BMP 280,\n");
+            Serial.print("ID of 0x60 represents a BME 280.\n");
+            Serial.print("ID of 0x61 represents a BME 680.\n");
             while (1);
         }
+
+        /* Default settings from datasheet */
+        bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                        Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                        Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                        Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                        Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
     }
 
     Vector3 getBMPReading() {
-      return Vector3(bayesBMP.readTemperature(), bayesBMP.readPressure(), bayesBMP.readAltitude(1013.25));
+    // degC, Pa, m
+      return Vector3(bmp.readTemperature(), bmp.readPressure(), bmp.readAltitude(1013.25));
     }
-};*/
+};
 #endif
