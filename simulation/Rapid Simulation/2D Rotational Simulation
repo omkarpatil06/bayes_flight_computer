@@ -67,20 +67,24 @@ class motion(object): #this section produces the actual simulation
         if k == 0:
             if i > 0:
                 total = self.Rot_inertia[0]*(self.Kd1*self.pitch_vel1[i]+self.Kp1*self.pitch1[i] + self.Ki1*sum(self.pitch1[:100])/100)/(self.COM)
-                if total > 0.5*thrust: 
-                    total = 0.5*thrust
-                if total < -0.5*thrust:
-                    total  = -0.5*thrust
+                upper_coefficient = ((math.sin((math.pi/180)*(30-self.pitch1[1])))**2)**(1/2)
+                lower_coefficient = ((math.sin((math.pi/180)*(-30-self.pitch1[1])))**2)**(1/2)
+                if total > upper_coefficient*thrust: 
+                    total = upper_coefficient*thrust
+                if total < -lower_coefficient*thrust:
+                    total  = -lower_coefficient*thrust
                 return -1*total
             else:
                 return 0
         if k == 1:
             if i > 0:
                 total = self.Rot_inertia[1]*(self.Kd2*self.pitch_vel2[i]+self.Kp1*self.pitch2[i] + self.Ki2*sum(self.pitch2[:100])/100)/(self.COM)
-                if total > 0.5*thrust: 
-                    total = 0.5*thrust
-                if total < -0.5*thrust:
-                    total  = -0.5*thrust
+                upper_coefficient = ((math.sin((math.pi/180)*(30-self.pitch2[1])))**2)**(1/2)
+                lower_coefficient = ((math.sin((math.pi/180)*(-30-self.pitch2[1])))**2)**(1/2)
+                if total > upper_coefficient*thrust: 
+                    total = upper_coefficient*thrust
+                if total < -lower_coefficient*thrust:
+                    total  = -lower_coefficient*thrust
                 return -1*total
             else:
                 return 0
@@ -143,7 +147,7 @@ def plot(gainvalues):#this function allows the manual input of gain values for s
     ax4.set_xlabel("Time[s]") 
     plt.show()
 def optimise():# this function is designed to produce optimal gain values, and then if the user desires simulate with those gain values
-    initial_guess = [-2.04231941e-03,  1.29311212e+00,  7.40759415e-01,  2.12248515e-03, 5.11150458e+00, -5.64745777e+01]
+    initial_guess = [0,0,0,0,0,0]
     simulation = scipy.optimize.minimize(gain,initial_guess, method='BFGS', tol = 0.1)
     print(simulation.x)
     model = int(input("would you like to simulate with these gain values? Enter 0 for yes, 1 for no"))
@@ -179,6 +183,6 @@ def main(i):
     if i == 1:
         gainvalues = [-4.65719482e-05,  1.05492562e-01,  1.85576019e-01,-5.03807305e-03,  5.11150458e+00,  8.91769185e+00]
         plot(gainvalues)
-main(0)#enter 0 to use optimise, 1 to mannually plot
+main(1)#enter 0 to use optimise, 1 to mannually plot
 
         
