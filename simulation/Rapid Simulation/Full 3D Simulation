@@ -52,7 +52,7 @@ class motion(object): #this section produces the actual simulation
         self.EDF_Thrust = []
         self.EDF_Thrust_Data = [0]
     def wind(self):#wind really fucks the gain values. Exclude from gain value searching but include in other simulations to test sturdyness of gain values
-        translational_constant = 0.0
+        translational_constant = 0.04
         wind_t = translational_constant*np.random.normal(self.wind_speed_average,self.wind_speed_varience)
         return wind_t
     def drag(self,i,k):
@@ -112,7 +112,7 @@ class motion(object): #this section produces the actual simulation
             self.height_vel.append(next_vel)
             next_height = self.height[i] + self.dt*next_vel
             self.height.append(next_height)
-            return mass*(acceleration)
+            return mass*(acceleration) + mass
         else:
             self.height_vel.append(0)
             self.height.append(-10)
@@ -155,7 +155,7 @@ def gain(gainvalues): #function to begin simulations
     total_pitch_squared = simulation.simulation(0)
     return total_pitch_squared
 
-def plot(gainvalues):#this function allows the manual input of gain values for simulation
+def plot(gainvalues):#this function allows the manual input of gain values for simulation, or the simulation of compuer-found gains
     simulation = motion(dt,itterations,COM,Rot_inertia,wind_speed_average,wind_speed_varience,initial_kinematic_data,gainvalues,filtervalues)
     pitch1, pitch_vel1, pitch2, pitch_vel2, height,EDF_Thrust = simulation.simulation(2)
     time = []
@@ -188,7 +188,9 @@ def plot(gainvalues):#this function allows the manual input of gain values for s
     ax6.set_xlabel("Time[s]") 
     plt.show()
 def optimise():# this function is designed to produce optimal gain values, and then if the user desires simulate with those gain values
-    initial_guess = [-1.49147361e-03,  1.48964321e+00,  7.80460037e-01,  2.36343952e-03, 5.11150458e+00, -7.31904693e+01, 0,0,0]
+    initial_guess = [ 9.72471366e-02,  8.14942208e+00,  6.24551207e+00,  1.64236884e-02,
+      5.11150458e+00, -6.49880276e+01, -4.06922109e-04, -1.73330444e-02,
+     -2.10520001e-01]
     simulation = scipy.optimize.minimize(gain,initial_guess, method='BFGS', tol = 0.1)
     print(simulation.x)
     model = int(input("would you like to simulate with these gain values? Enter 0 for yes, 1 for no"))
@@ -198,8 +200,10 @@ def main(i):
     if i == 0:
         optimise()
     if i == 1:
-        gainvalues = [7.72150014e-04,  2.56611593e+00,  1.91356701e+00, -6.25297838e-04, 5.11150458e+00,  1.85112068e+00,0,0,0]
+        gainvalues = [ 9.72471366e-02,  8.14942208e+00,  6.24551207e+00,  1.64236884e-02,
+          5.11150458e+00, -6.49880276e+01, -4.06922109e-04, -1.73330444e-02,
+         -2.10520001e-01]
         plot(gainvalues)
-main(0)#enter 0 to use optimise, 1 to mannually plot
+main(1)#enter 0 to use optimise, 1 to mannually plot
 
         
