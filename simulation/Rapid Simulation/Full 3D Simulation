@@ -6,33 +6,26 @@ Created on Thu Mar 14 17:12:55 2024
 @author: thomas
 """
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Mar 12 13:51:13 2024
-
-@author: thomas
-"""
-
 #a programme written for simulating Bayes. It allows for rapid simulation and production of gain values 
 #and allows for the ballancing of a number of factors, such as pitch, pitch vel.
 
 import numpy as np
-import scipy 
+import scipy
 import matplotlib.pyplot as plt
 import math
 
-mass = 3
-dt = 0.01#timestep
-itterations = 100#higher values produce unrealistic gain values. part of the job is choosing a reasonable total time to simulate
-COM = 0.1
-Rot_inertia = [3,2]
-wind_speed_average = 3 
-wind_speed_varience = 0.5
-initial_kinematic_data = [3,0,3,0,-3,0]#in degrees. first one is initial pitch, second one is pitch velocity
+mass = 4#kg
+dt = 0.05#timestep
+itterations = 400#higher values produce unrealistic gain values. part of the job is choosing a reasonable total time to simulate
+COM = 0.1#distance EDF is from the center of mass
+Rot_inertia = [4,4]#the rotational inertia
+wind_speed_average = 3#in m/s
+wind_speed_varience = 0.1
+initial_kinematic_data = [0,0,0,0,0,0]#in degrees. first one is initial pitch, second one is pitch velocity, and then you roll through each axis
 filtervalues = [1,0.5,0,1,0.5,0,1,0.5,0]#these give different weightings to different facors in the optimisation proccess. The first value is pitch,then pitch vel, then force exherted by the EDF
-max_thrust = 5.5
+max_acceleration = 5.5#in m/s
 class motion(object): #this section produces the actual simulation
+
     def __init__(self, dt,itterations,COM,Rot_inertia,wind_speed_average,wind_speed_varience,initial_kinematic_data,gainvalues, filtervalues):
         self.dt = dt
         self.itterations = itterations
@@ -59,33 +52,37 @@ class motion(object): #this section produces the actual simulation
         self.total_error = [0]
         self.EDF_Thrust = []
         self.EDF_Thrust_Data = [0]
-    def wind(self):#wind really fucks the gain values. Exclude from gain value searching but include in other simulations to test sturdyness of gain values
-        translational_constant = 0.1
-        wind_t = translational_constant*np.random.normal(self.wind_speed_average,self.wind_speed_varience)
+        
+    def wind(self,i):#wind really fucks the gain values. Exclude from gain value searching but include in other simulations to test sturdyness of gain values
+        translational_constant = 0.5#Gives a measure of how a gust of wind orthogonal to Bayes rotates it
+        wind_t = translational_constant*np.sin(i/100)
         return wind_t
+    
     def drag(self,i,k):
-        coefficient_1 = 0.001
+        coefficient_1 = 0.001#arbitary values. I suspect coefficient_1 = 0
         coefficient_2 = 0.00001
         if k == 0:
             return -(self.pitch_vel1[i]-wind_speed_average)*coefficient_1-coefficient_2*(self.pitch_vel1[i]-wind_speed_average)**2
         if k == 1:
             return -(self.pitch_vel2[i]-wind_speed_average)*coefficient_1-coefficient_2*(self.pitch_vel2[i]-wind_speed_average)**2
-    def rotate(self,i,k):
+   
+    def rotate(self,i,k):#gives rotation of Bayes given an angular displacement, ie the pendulum effect
         if k == 0:
             angular_rot = (math.pi/180)*self.pitch1[i]*self.COM*self.Rot_inertia[k]
         if k == 1:
             angular_rot = (math.pi/180)*self.pitch2[i]*self.COM*self.Rot_inertia[k]
         return angular_rot
+    
     def TVC(self,i,k):
         if k == 0:
             if i > 0:
-                total = self.Rot_inertia[0]*(self.Kd1*self.pitch_vel1[i]+self.Kp1*self.pitch1[i] + self.Ki1*sum(self.pitch1[:100])/100)/(self.COM)
+                total = self.Rot_inertia[0]*(self.Kd1*self.pitch_vel1[i]+self.Kp1*self.pitch1[i] + self.Ki1*sum(self.pitch1))/(self.COM)
                 upper_coefficient = ((math.sin((math.pi/180)*(30-self.pitch1[1])))**2)**(1/2)
                 lower_coefficient = ((math.sin((math.pi/180)*(-30-self.pitch1[1])))**2)**(1/2)
-                if total > upper_coefficient*max_thrust: 
-                    total = upper_coefficient*max_thrust
-                if total < -lower_coefficient*max_thrust:
-                    total  = -lower_coefficient*max_thrust
+                if total > upper_coefficient*max_acceleration: 
+                    total = upper_coefficient*max_acceleration
+                if total < -lower_coefficient*max_acceleration:
+                    total  = -lower_coefficient*max_acceleration
                 self.EDF_Thrust.append(total)
                 return -1*total
             else:
@@ -93,30 +90,32 @@ class motion(object): #this section produces the actual simulation
                 return 0
         if k == 1:
             if i > 0:
-                total = self.Rot_inertia[1]*(self.Kd2*self.pitch_vel2[i]+self.Kp1*self.pitch2[i] + self.Ki2*sum(self.pitch2[:100])/100)/(self.COM)
+                total = self.Rot_inertia[1]*(self.Kd2*self.pitch_vel2[i]+self.Kp1*self.pitch2[i] + self.Ki2*sum(self.pitch2))/(self.COM)
                 upper_coefficient = ((math.sin((math.pi/180)*(30-self.pitch2[1])))**2)**(1/2)
                 lower_coefficient = ((math.sin((math.pi/180)*(-30-self.pitch2[1])))**2)**(1/2)
-                if total > upper_coefficient*max_thrust: 
-                    total = upper_coefficient*max_thrust
-                if total < -lower_coefficient*max_thrust:
-                    total  = -lower_coefficient*max_thrust
+                if total > upper_coefficient*max_acceleration: 
+                    total = upper_coefficient*max_acceleration
+                if total < -lower_coefficient*max_acceleration:
+                    total  = -lower_coefficient*max_acceleration
                 self.EDF_Thrust.append(total)
                 return -1*total
             else:
                 self.EDF_Thrust.append(0)
                 return 0
+   
     def forces(self,i,k):
-        total = self.TVC(i,k) + self.wind() + self.rotate(i,k) + self.drag(i,k)
+        total = self.TVC(i,k) + self.wind(i) + self.rotate(i,k) + self.drag(i,k)
         self.total_forces.append(total)
         return total
+    
     def height_simulator(self,i,Remaining_Thrust):
         if i > 0:
             acceleration = (self.Kd3*self.height_vel[i]+self.Kp3*self.height[i] + self.Ki3*sum(self.height[:100])/100)
-            if acceleration > ((Remaining_Thrust/mass - mass)):
-                acceleration = ((Remaining_Thrust/mass - mass))
+            if acceleration > ((Remaining_Thrust/mass)):
+                acceleration = ((Remaining_Thrust/mass))
             if acceleration < -1:
                 acceleration = -1
-            next_vel = self.height_vel[i] + acceleration*self.dt
+            next_vel = self.height_vel[i] + (acceleration)*self.dt
             self.height_vel.append(next_vel)
             next_height = self.height[i] + self.dt*next_vel
             self.height.append(next_height)
@@ -125,6 +124,7 @@ class motion(object): #this section produces the actual simulation
             self.height_vel.append(0)
             self.height.append(initial_kinematic_data[4])
             return 0
+    
     def simulation(self,j):
         total = 0
         for i in range(0,self.itterations):
@@ -135,7 +135,9 @@ class motion(object): #this section produces the actual simulation
             next_pitch_vel2 = self.pitch_vel2[i] + self.dt*self.forces(i,1)
             next_pitch2 = self.pitch2[i] + self.dt*next_pitch_vel2
             if 5.5**2-(self.EDF_Thrust.copy()[0]**2+self.EDF_Thrust.copy()[1]) > 0:
-                Remaining_Thrust = (max_thrust**2-(self.EDF_Thrust.copy()[0]**2+self.EDF_Thrust.copy()[1]**2))**(1/2)
+                Remaining_Thrust = (max_acceleration**2-(self.EDF_Thrust.copy()[0]**2+self.EDF_Thrust.copy()[1]**2))**(1/2)
+            else:
+                Remaining_Thrust = -(max_acceleration**2-(self.EDF_Thrust.copy()[0]**2+self.EDF_Thrust.copy()[1]**2))**(1/2)
             EDF_upwards_thrust = self.height_simulator(i, Remaining_Thrust)
             EDF_Total_thrust = (EDF_upwards_thrust**2 + self.EDF_Thrust.copy()[0]**2+self.EDF_Thrust.copy()[1]**2)**(1/2)
             self.pitch2.append(next_pitch2)
@@ -146,20 +148,24 @@ class motion(object): #this section produces the actual simulation
             self.total_error.append(total)
         if j == 0:
             return total
+        print(total)
         if j == 1:
             return self.pitch
         if j ==2:
             return self.pitch1, self.pitch_vel1, self.pitch2, self.pitch_vel2, self.height, self.height_vel, self.EDF_Thrust_Data, self.total_error
+    
     def filter(self,rotational_data):
         filter_value = 0
         for i in range(0,len(rotational_data)):
             filter_value += filtervalues[i]*(rotational_data[i])**2
         return filter_value
 
+
 def gain(gainvalues): #function to begin simulations
     simulation = motion(dt,itterations,COM,Rot_inertia,wind_speed_average,wind_speed_varience,initial_kinematic_data,gainvalues,filtervalues)
     total_pitch_squared = simulation.simulation(0)
     return total_pitch_squared
+
 
 def plot(gainvalues):#this function allows the manual input of gain values for simulation, or the simulation of compuer-found gains
     simulation = motion(dt,itterations,COM,Rot_inertia,wind_speed_average,wind_speed_varience,initial_kinematic_data,gainvalues,filtervalues)
@@ -201,22 +207,42 @@ def plot(gainvalues):#this function allows the manual input of gain values for s
     ax8.set_ylabel("Gain Errors[unitless]")
     ax8.set_xlabel("Time[s]") 
     plt.show()
+
+def stress_test(gainvalues):#not finished. Supposed to test how much shaking it takes to crash Bayes
+    total_error_list = []
+    angle_list = []
+    for i in range(0,10):
+        init_values = [(i-10)/1,0,(i-10)/1,0,(i-10)/1,0]
+        simulation = motion(dt,itterations,COM,Rot_inertia,wind_speed_average,wind_speed_varience,init_values,gainvalues,filtervalues)
+        total_error = simulation.simulation(0)
+        total_error_list.append(total_error)
+        angle_list.append((i-10)/10)
+    print(total_error_list)
+    plt.plot(angle_list,total_error_list,"b") #plots
+    plt.title("Total_Errors")        
+    plt.xlabel("Initial Angles")
+    plt.ylabel("Total Gain Error")
+    plt.show()    
+     
     
 def optimise():# this function is designed to produce optimal gain values, and then if the user desires simulate with those gain values
-    initial_guess = [ 9.72471366e-02,  8.14942208e+00,  6.24551207e+00,  19.72471366e-02,  8.14942208e+00,  6.24551207e+00, -4.06922109e-04, -1.73330444e-02,
-     -2.10520001e-01]
-    simulation = scipy.optimize.minimize(gain,initial_guess, method='BFGS', tol = 0.1)
+    initial_guess = [ 9.72471366e-02,  8.14942208e+00,  6.24551207e+00,  19.72471366e-02,  8.14942208e+00,  6.24551207e+00, -4.06922109e-04, -1.73330444e-02, -2.10520001e-01]
+    #suggested values: [ 9.72471366e-02,  8.14942208e+00,  6.24551207e+00,  19.72471366e-02,  8.14942208e+00,  6.24551207e+00, -4.06922109e-04, -1.73330444e-02, -2.10520001e-01]
+    simulation = scipy.optimize.minimize(gain,initial_guess, method='BFGS', tol = 0.01)
     print(simulation.x)
     model = int(input("would you like to simulate with these gain values? Enter 0 for yes, 1 for no"))
     if model == 0:
         plot(simulation.x)
+        
+        
 def main(i): 
+    gainvalues =[ 9.72474714e-02,  8.14942238e+00,  6.24551199e+00,  1.97247133e-01, 8.14942190e+00,  6.24551203e+00, -4.06360181e-04, -1.73332487e-02,-2.10519980e-01]
     if i == 0:
         optimise()
     if i == 1:
-        gainvalues = [ 9.72471366e-02,  8.14942208e+00,  6.24551207e+00,  19.72471366e-02,  8.14942208e+00,  6.24551207e+00, 9.72471366e-02,  8.14942208e+00,  6.24551207e+00
-         -2.10520001e-01]
         plot(gainvalues)
+    if i == 2:
+        stress_test(gainvalues)
 main(0)#enter 0 to use optimise, 1 to mannually plot
 
-        
+#[ 9.72474714e-02,  8.14942238e+00,  6.24551199e+00,  1.97247133e-01, 8.14942190e+00,  6.24551203e+00, 0,0,0]
