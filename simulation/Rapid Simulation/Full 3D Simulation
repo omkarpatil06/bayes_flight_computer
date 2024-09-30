@@ -66,7 +66,7 @@ class motion(object): #this section produces the actual simulation
         if k == 1:
             return -(self.pitch_vel2[i]-wind_speed_average)*coefficient_1-coefficient_2*(self.pitch_vel2[i]-wind_speed_average)**2
    
-    def rotate(self,i,k):#gives rotation of Bayes given an angular displacement, ie the pendulum effect
+    def rotate(self,i,k):#gives rotation of Bayes given an angular displacement, ie the pendulum effect becuase of vertical stabilisation. More Physics is needed to work out the real dependancy on height.
         if k == 0:
             angular_rot = (math.pi/180)*self.pitch1[i]*self.COM*self.Rot_inertia[k]
         if k == 1:
